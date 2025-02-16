@@ -10,6 +10,8 @@ from django.conf import settings
 from django.utils import timezone
 
 from core.base_model import Model
+import json
+from .models import Outbox
 
 logger = structlog.get_logger(__name__)
 
@@ -82,3 +84,9 @@ class EventLogClient:
         result = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', event_name)
         return re.sub('([a-z0-9])([A-Z])', r'\1_\2', result).lower()
 
+
+def log_event(event_type, event_context):
+    Outbox.objects.create(
+        event_type=event_type,
+        event_context=json.dumps(event_context),
+    )

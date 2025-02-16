@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build: .
@@ -7,6 +5,7 @@ services:
     depends_on:
       - db
       - clickhouse
+      - redis
     command: [ "../docker/wait-for-it.sh", "db:5432", "--", "python", "manage.py", "runserver", "0.0.0.0:8000" ]
     ports:
       - 8000:8000
@@ -43,6 +42,50 @@ services:
       - 8123:8123
     volumes:
       - ./docker/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  celery_worker:
+    build: .
+    restart: always
+    command: [ "celery", "-A", "my_celery", "worker", "--loglevel=info" ]
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/srv/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    networks:
+      - default
+
+  celery_beat:
+    build: .
+    restart: always
+    command: [ "celery", "-A", "my_celery", "beat", "--loglevel=info" ]
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/srv/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    networks:
+      - default
+
+  test:
+    build: .
+    depends_on:
+      - db
+      - clickhouse
+      - redis
+    command: [ "pytest", "--maxfail=1", "--disable-warnings", "--timeout=60" ]
+    volumes:
+      - .:/srv/app
+    environment:
+      - DATABASE_URL=postgres://test_user:123456@db:5432/test_database
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
 
 
 volumes:
